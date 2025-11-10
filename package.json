@@ -1,0 +1,28 @@
+{
+  "name": "college-event-management",
+  "version": "1.0.0",
+  "description": "College Event Management System with QR codes, voting, and feedback",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && nodemon index.js",
+    "client": "cd client && npm start",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "keywords": [
+    "events",
+    "college",
+    "management"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2"
+  },
+  "dependencies": {
+    "@zxing/browser": "^0.1.5",
+    "multer": "^2.0.2",
+    "react-qr-scanner": "^1.0.0-alpha.11"
+  }
+}
