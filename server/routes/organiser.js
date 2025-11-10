@@ -7,7 +7,7 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// 🔒 Restrict to organiser role
+// Restrict to organiser role
 const organiserOnly = (req, res, next) => {
   if (req.user.role !== 'organiser') {
     return res.status(403).json({ error: 'Access denied: Organisers only' });
@@ -189,31 +189,49 @@ router.delete('/delete-event/:id', authMiddleware, organiserOnly, (req, res) => 
 
   const dbConn = db.getDb();
 
-  // Step 1: Delete related registrations first
+  // Step 1: Delete related registrations
   dbConn.run(`DELETE FROM registrations WHERE event_id = ?`, [id], function (err) {
     if (err) {
       console.error("❌ Error deleting registrations:", err.message);
       return res.status(500).json({ error: "Failed to delete registrations" });
     }
 
-    // Step 2: Delete the event itself
-    dbConn.run(`DELETE FROM events WHERE id = ? AND created_by = ?`, [id, organiserId], function (err) {
+    // Step 2: Delete related feedback
+    dbConn.run(`DELETE FROM feedback WHERE event_id = ?`, [id], function (err) {
       if (err) {
-        console.error("❌ Error deleting event:", err.message);
-        return res.status(500).json({ error: "Failed to delete event" });
+        console.error("❌ Error deleting feedback:", err.message);
+        return res.status(500).json({ error: "Failed to delete feedback" });
       }
 
-      if (this.changes === 0) {
-        return res.status(404).json({ error: "Event not found or unauthorized" });
-      }
+      // Step 3: Delete related notifications
+      dbConn.run(`DELETE FROM notifications WHERE event_id = ?`, [id], function (err) {
+        if (err) {
+          console.error("❌ Error deleting notifications:", err.message);
+          return res.status(500).json({ error: "Failed to delete notifications" });
+        }
 
-      console.log("✅ Event and related registrations deleted successfully");
-      res.json({ message: "Event deleted successfully" });
+        // Step 4: Finally delete the event itself
+        dbConn.run(
+          `DELETE FROM events WHERE id = ? AND created_by = ?`,
+          [id, organiserId],
+          function (err) {
+            if (err) {
+              console.error("❌ Error deleting event:", err.message);
+              return res.status(500).json({ error: "Failed to delete event" });
+            }
+
+            if (this.changes === 0) {
+              return res.status(404).json({ error: "Event not found or unauthorized" });
+            }
+
+            console.log("✅ Event and all linked records deleted successfully");
+            res.json({ message: "Event deleted successfully" });
+          }
+        );
+      });
     });
   });
 });
-
-
 // -------------------- GET PARTICIPANTS --------------------
 router.get('/event/:id/participants', authMiddleware, organiserOnly, (req, res) => {
   const { id } = req.params;

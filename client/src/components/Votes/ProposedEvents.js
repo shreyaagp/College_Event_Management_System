@@ -24,8 +24,8 @@ const ProposedEvents = () => {
     try {
       const proposalsRes = await API.get('/votes/proposed');
       setProposedEvents(proposalsRes.data || []);
-
-      // Fetch user votes for each proposed event (only if student)
+      console.log("Fetched proposals:", proposalsRes.data);
+  
       if (user && user.role === 'student') {
         const votesMap = {};
         for (const proposal of (proposalsRes.data || [])) {
@@ -34,8 +34,8 @@ const ProposedEvents = () => {
             if (voteRes.data && voteRes.data.vote_type) {
               votesMap[proposal.id] = voteRes.data.vote_type;
             }
-          } catch (err) {
-            // User hasn't voted on this event
+          } catch {
+            // no vote
           }
         }
         setUserVotes(votesMap);
@@ -76,6 +76,19 @@ const ProposedEvents = () => {
     }
   };
 
+  const handleDeleteProposal = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this proposal?')) return;
+  
+    try {
+      await API.delete(`/votes/proposed/${id}`);
+      alert('Proposal deleted successfully!');
+      await fetchProposedEvents();
+    } catch (error) {
+      console.error('Error deleting proposal:', error);
+      alert(error.response?.data?.error || 'Failed to delete proposal');
+    }
+  };
+
   const handleProposeEvent = async (e) => {
     e.preventDefault();
     
@@ -102,7 +115,6 @@ const ProposedEvents = () => {
     'Electrical Engineering',
     'Mechanical Engineering',
     'Civil Engineering'
-    
   ];
 
   if (loading) {
@@ -265,6 +277,23 @@ const ProposedEvents = () => {
                     👎 Downvotes: <strong>{event.downvotes || 0}</strong>
                   </div>
                 </div>
+              )}
+
+              {user?.role === 'organiser' && event.proposed_by_id === user.id && (
+                <button
+                  onClick={() => handleDeleteProposal(event.id)}
+                  style={{
+                    marginTop: '1rem',
+                    background: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗑️ Delete Proposal
+                </button>
               )}
             </div>
           ))}

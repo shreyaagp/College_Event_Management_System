@@ -47,6 +47,43 @@ router.post('/propose', authenticate, organiserOnly, (req, res) => {
   });
 });
 
+// ===== Delete a proposed event (ORGANISERS ONLY) =====
+router.delete('/proposed/:id', authenticate, organiserOnly, (req, res) => {
+  const { id } = req.params;
+  const organiserId = req.user.id;
+  const dbConn = db.getDb();
+
+  console.log("🗑️ Delete proposed event attempt:", id, "by organiser:", organiserId);
+
+  // Step 1: Delete votes linked to this proposed event
+  dbConn.run(`DELETE FROM votes WHERE proposed_event_id = ?`, [id], function (err) {
+    if (err) {
+      console.error("❌ Error deleting votes:", err.message);
+      return res.status(500).json({ error: "Failed to delete votes" });
+    }
+
+    // Step 2: Delete the proposed event itself
+    dbConn.run(
+      `DELETE FROM proposed_events WHERE id = ? AND proposed_by_id = ?`,
+      [id, organiserId],
+      function (err) {
+        if (err) {
+          console.error("❌ Error deleting proposed event:", err.message);
+          return res.status(500).json({ error: "Failed to delete proposed event" });
+        }
+
+        if (this.changes === 0) {
+          return res.status(404).json({ error: "Proposed event not found or unauthorized" });
+        }
+
+        console.log("✅ Proposed event and linked votes deleted successfully");
+        res.json({ message: "Proposed event deleted successfully" });
+      }
+    );
+  });
+});
+
+
 // ===== Get all proposed events =====
 router.get('/proposed', authenticate, (req, res) => {
   const sql = `
