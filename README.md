@@ -54,7 +54,7 @@ Create a `.env` file in the `server` directory:
 PORT=5001
 JWT_SECRET=your-secret-key-change-in-production
 SESSION_SECRET=your-session-secret-change-in-production
-CLIENT_URL=http://localhost:3000
+CLIENT_URL=http://localhost:3001
 COLLEGE_EMAIL_DOMAIN=@nie.ac.in
 
 # Google OAuth
