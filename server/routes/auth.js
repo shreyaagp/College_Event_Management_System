@@ -1,8 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const passport = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const { getDb } = require("../init");
@@ -15,129 +13,6 @@ const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
 // Store password reset tokens temporarily in memory
 const passwordResetTokens = new Map();
-
-// =================== GOOGLE OAUTH SETUP ===================
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5001/api/auth/google/callback",
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        const email = profile.emails[0]?.value;
-        if (!email) return done(new Error("No email found in Google profile"));
-
-        if (!validateCollegeEmail(email)) {
-          return done(null, false, { message: "Only college email addresses are allowed" });
-        }
-
-        db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
-          if (err) return done(err);
-          if (user) return done(null, user);
-          return done(null, false, {
-            message: "Please complete registration first",
-            profile: {
-              email,
-              name: profile.displayName,
-              googleId: profile.id,
-              picture: profile.photos[0]?.value,
-            },
-          });
-        });
-      } catch (error) {
-        return done(error);
-      }
-    }
-  )
-);
-
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser((id, done) => {
-  db.get("SELECT * FROM users WHERE id = ?", [id], (err, user) => done(err, user));
-});
-
-// =================== GOOGLE OAUTH ROUTES ===================
-// Kick off Google OAuth
-router.get(
-  "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
-);
-
-// Google OAuth callback
-router.get("/google/callback", (req, res, next) => {
-  passport.authenticate("google", { session: false }, (err, user, info) => {
-    if (err) return next(err);
-
-    // Existing user -> issue JWT and redirect back to client
-    if (user) {
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-      const userPayload = { id: user.id, email: user.email, role: user.role, name: user.name, department: user.department, usn: user.usn, semester: user.semester };
-      const redirectUrl = `${CLIENT_URL}/auth/google/callback?token=${encodeURIComponent(
-        token
-      )}&user=${encodeURIComponent(JSON.stringify(userPayload))}`;
-      return res.redirect(redirectUrl);
-    }
-
-    // Not registered yet -> redirect to registration with prefilled profile
-    if (info && info.profile) {
-      const redirectUrl = `${CLIENT_URL}/register?google=true&profile=${encodeURIComponent(
-        JSON.stringify(info.profile)
-      )}`;
-      return res.redirect(redirectUrl);
-    }
-
-    // Fallback
-    return res.redirect(`${CLIENT_URL}/login?error=google_auth_failed`);
-  })(req, res, next);
-});
-
-// Complete registration for Google users
-router.post("/google/register", (req, res) => {
-  const { role, name, email, googleId, department, usn, semester } = req.body;
-
-  if (!role || !["student", "organiser"].includes(role)) {
-    return res.status(400).json({ error: "Role must be student or organiser" });
-  }
-  if (!email || !name) {
-    return res.status(400).json({ error: "Name and email are required" });
-  }
-  if (!validateCollegeEmail(email)) {
-    const domain = process.env.COLLEGE_EMAIL_DOMAIN || "@nie.ac.in";
-    return res.status(400).json({ error: `Only ${domain} email addresses are allowed` });
-  }
-  if (role === "organiser" && !department) {
-    return res.status(400).json({ error: "Department is required for organisers" });
-  }
-  if (role === "student" && (!usn || !semester)) {
-    return res.status(400).json({ error: "USN and semester are required for students" });
-  }
-
-  // Create user without password; password column can be NULL
-  const values = [role, name, email, null, department || null, usn || null, semester || null];
-
-  db.run(
-    "INSERT INTO users (role, name, email, password, department, usn, semester) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    values,
-    function (err) {
-      if (err) {
-        if (err.message.includes("UNIQUE")) return res.status(400).json({ error: "Email already registered" });
-        return res.status(500).json({ error: err.message });
-      }
-      const token = jwt.sign({ id: this.lastID, email, role }, JWT_SECRET, { expiresIn: "7d" });
-      res.status(201).json({
-        message: "Registration successful 🎉",
-        token,
-        user: { id: this.lastID, email, role, name, department, usn, semester },
-      });
-    }
-  );
-});
 
 // =================== REGISTER ===================
 router.post("/register", async (req, res) => {
@@ -198,7 +73,7 @@ router.post("/login", (req, res) => {
     if (err) return res.status(500).json({ error: "Database error" });
     if (!user) return res.status(400).json({ error: "User not found" });
 
-    if (!user.password) return res.status(400).json({ error: "This account uses Google Sign-In only" });
+    if (!user.password) return res.status(400).json({ error: "Invalid credentials" });
 
     const valid = bcrypt.compareSync(password, user.password);
     if (!valid) return res.status(400).json({ error: "Invalid password" });

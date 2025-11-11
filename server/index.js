@@ -4,8 +4,6 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
-const session = require('express-session');
-const passport = require('passport');
 require('dotenv').config();
 
 const { getDb, init } = require('./init');
@@ -28,19 +26,6 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// ====== Sessions for Passport ======
-app.use(
-  session({
-    secret:
-      process.env.SESSION_SECRET || 'your-session-secret-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-  })
-);
-
-app.use(passport.initialize());
-app.use(passport.session());
 
 // ====== Static Uploads ======
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
